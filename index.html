@@ -1,1 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IDV Assignment 1 — PSI Table</title>
+  <meta name="description" content="Connect to data.gov.sg PSI API and print 12 readings into a table." />
+  <style>
+    :root {
+      --bg: #0b0f17; --panel: #111827; --text:#e5e7eb; --muted:#9aa4b2;
+      --accent:#60a5fa; --border:#1f2937; --radius:12px;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);
+      font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,PingFang SC,Noto Sans SC,sans-serif}
+    header{padding:16px 22px;background:#0f172a;border-bottom:1px solid var(--border)}
+    main{max-width:1100px;margin:22px auto;padding:0 16px}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px}
+    h1{margin:.2em 0 .2em}
+    .muted{color:var(--muted)}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    button{cursor:pointer;border:1px solid var(--border);background:#0f172a;color:var(--text);
+      padding:8px 12px;border-radius:10px}
+    .status{font-size:14px}
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    thead th{position:sticky;top:0;background:#0f172a}
+    th,td{border:1px solid var(--border);padding:8px 10px;text-align:right}
+    th:first-child, td:first-child{text-align:left;white-space:nowrap}
+    tbody tr:hover{background:#0f1320}
+    caption{caption-side:bottom;color:var(--muted);padding-top:8px;text-align:left}
+    .err{color:#ffb4b4}
+  </style>
+</head>
+<body>
+  <header>
+    <strong>IDV Assignment 1</strong> — PSI readings table (data.gov.sg)
+  </header>
+  <main>
+    <section class="card">
+      <h1>PSI Readings (Realtime)</h1>
+      <div class="row">
+        <div id="meta" class="status muted">Loading…</div>
+        <button id="reload" title="Fetch latest">Refresh</button>
+      </div>
+      <div id="wrap"></div>
+    </section>
+  </main>
+
+  <script>
+  // Assignment requirements:
+  // - Endpoint: https://api.data.gov.sg/v1/environment/psi
+  // - Print all 12 readings into a table: from 'o3_sub_index' to 'psi_twenty_four_hourly'.
+  // - Columns: national, central, west, east, north, south.
+
+  const ENDPOINT = 'https://api.data.gov.sg/v1/environment/psi';
+
+  // Order + friendly labels for the 12 readings
+  const readingOrder = [
+    'o3_sub_index',
+    'pm10_twenty_four_hourly',
+    'pm10_sub_index',
+    'co_sub_index',
+    'pm25_sub_index',
+    'so2_sub_index',
+    'co_eight_hour_max',
+    'no2_one_hour_max',
+    'so2_twenty_four_hourly',
+    'pm25_twenty_four_hourly',
+    'psi_twenty_four_hourly',
+    'o3_eight_hour_max'
+  ];
+  const labelMap = {
+    o3_sub_index: 'O₃ Sub Index',
+    pm10_twenty_four_hourly: 'PM₁₀ (24-hr)',
+    pm10_sub_index: 'PM₁₀ Sub Index',
+    co_sub_index: 'CO Sub Index',
+    pm25_sub_index: 'PM₂.₅ Sub Index',
+    so2_sub_index: 'SO₂ Sub Index',
+    co_eight_hour_max: 'CO (8-hr max)',
+    no2_one_hour_max: 'NO₂ (1-hr max)',
+    so2_twenty_four_hourly: 'SO₂ (24-hr)',
+    pm25_twenty_four_hourly: 'PM₂.₅ (24-hr)',
+    psi_twenty_four_hourly: 'PSI (24-hr)',
+    o3_eight_hour_max: 'O₃ (8-hr max)'
+  };
+
+  const metaEl = document.getElementById('meta');
+  const wrap = document.getElementById('wrap');
+  const reloadBtn = document.getElementById('reload');
+
+  reloadBtn.addEventListener('click', loadPSI);
+
+  async function loadPSI(){
+    metaEl.textContent = 'Loading…';
+    wrap.innerHTML = '';
+    try{
+      const res = await fetch(ENDPOINT);
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      const apiStatus = data?.api_info?.status || 'unknown';
+      const item = (data?.items && data.items[0]) || {};
+      const ts = item.update_timestamp || item.timestamp || '';
+      const readings = item.readings || {};
+
+      // Derive region list from any reading (fallback to common set)
+      const first = readings[readingOrder.find(k => readings[k])];
+      const regions = first ? Object.keys(first) : ['national','central','west','east','north','south'];
+
+      // Build table
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      const tbody = document.createElement('tbody');
+      const trHead = document.createElement('tr');
+
+      // Header cells
+      const th0 = document.createElement('th'); th0.textContent = 'Reading';
+      trHead.appendChild(th0);
+      regions.forEach(r => {
+        const th = document.createElement('th'); th.textContent = r;
+        trHead.appendChild(th);
+      });
+      thead.appendChild(trHead);
+
+      // Body rows for each of the 12 readings
+      readingOrder.forEach(key => {
+        const row = document.createElement('tr');
+        const name = document.createElement('td'); name.textContent = labelMap[key] || key;
+        row.appendChild(name);
+
+        const obj = readings[key] || {};
+        regions.forEach(r => {
+          const td = document.createElement('td');
+          const v = obj[r];
+          td.textContent = (v === undefined || v === null) ? '—' : Number(v).toFixed(1);
+          row.appendChild(td);
+        });
+        tbody.appendChild(row);
+      });
+
+      table.appendChild(thead);
+      table.appendChild(tbody);
+
+      // Caption
+      const caption = document.createElement('caption');
+      caption.textContent = `Updated: ${ts || 'N/A'} · API status: ${apiStatus}`;
+      table.appendChild(caption);
+
+      wrap.appendChild(table);
+      metaEl.textContent = `OK · ${ts || 'no timestamp'}`;
+    }catch(err){
+      metaEl.innerHTML = `<span class="err">Error: ${err.message}</span> — If opening the file locally, try a local server (VS Code “Live Server”) or GitHub Pages.`;
+    }
+  }
+
+  loadPSI();
+  </script>
+</body>
+</html>
 
