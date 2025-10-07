@@ -116,8 +116,13 @@
       const item = (data?.items && data.items[0]) || {};
       const ts = item.update_timestamp || item.timestamp || '';
       const readings = item.readings || {};
-
-      
+      // Canon detection
+      const CANON = ['national','central','west','east','north','south'];
+      const regionSet = new Set();
+      readingOrder.forEach(k => {
+        const obj = readings[k];
+        if (obj) Object.keys(obj).forEach(r => regionSet.add(r));
+      });
       const regions = ['national','central','west','east','north','south'];
 
       // Build table
